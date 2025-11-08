@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مسح الحضور</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+            min-height: 100vh;
+            padding: 15px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .count {
+            color: #3498db;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .scanner-container {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        #scanner {
+            width: 100%;
+            height: 350px;
+            background: #000;
+            position: relative;
+        }
+
+        #scanner video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scan-target {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px;
+            height: 140px;
+            border: 3px solid #3498db;
+            border-radius: 10px;
+            box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+        }
+
+        .scan-target::before,
+        .scan-target::after {
+            content: '';
+            position: absolute;
+            background: #3498db;
+        }
+
+        .scan-target::before {
+            top: -3px;
+            left: 20px;
+            right: 20px;
+            height: 3px;
+        }
+
+        .scan-target::after {
+            bottom: -3px;
+            left: 20px;
+            right: 20px;
+            height: 3px;
+        }
+
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #2ecc71;
+        }
+
+        .corner.top-left {
+            top: -3px;
+            left: -3px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .corner.top-right {
+            top: -3px;
+            right: -3px;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .corner.bottom-left {
+            bottom: -3px;
+            left: -3px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .corner.bottom-right {
+            bottom: -3px;
+            right: -3px;
+            border-left: none;
+            border-top: none;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #2ecc71, transparent);
+            animation: scanning 2s ease-in-out infinite;
+        }
+
+        @keyframes scanning {
+            0% { top: 0; }
+            50% { top: 100%; }
+            100% { top: 0; }
+        }
+
+        .instruction {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(52, 152, 219, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 11;
+        }
+
+        .controls {
+            padding: 15px;
+            text-align: center;
+            background: white;
+            border-radius: 0 0 15px 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            flex: 1;
+            max-width: 200px;
+        }
+
+        button:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.stop {
+            background: #e74c3c;
+        }
+
+        button.stop:hover {
+            background: #c0392b;
+        }
+
+        button.scan-now {
+            background: #2ecc71;
+            font-size: 18px;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        button.scan-now:hover {
+            background: #27ae60;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .success-flash {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(46, 204, 113, 0.95);
+            color: white;
+            padding: 25px 50px;
+            border-radius: 15px;
+            font-size: 22px;
+            font-weight: bold;
+            z-index: 1000;
+            animation: flash 0.6s ease-out;
+        }
+
+        @keyframes flash {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #3498db;
+            color: white;
+            padding: 12px;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ecf0f1;
+            text-align: right;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .time {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #95a5a6;
+        }
+
+        .status {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(52, 152, 219, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 999;
+            display: none;
+        }
+
+        .error {
+            background: rgba(231, 76, 60, 0.9);
+        }
+
+        .camera-off {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="status" id="status"></div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>مسح الحضور</h1>
+            <div class="count">العدد: <span id="count">0</span></div>
+        </div>
+
+        <div class="scanner-container">
+            <div id="scanner" class="camera-off">
+                <div class="scan-target">
+                    <div class="corner top-left"></div>
+                    <div class="corner top-right"></div>
+                    <div class="corner bottom-left"></div>
+                    <div class="corner bottom-right"></div>
+                    <div class="scan-line"></div>
+                </div>
+                <div class="instruction">ضع الباركود داخل الإطار</div>
+            </div>
+            <div class="controls">
+                <button id="startBtn" onclick="startScanner()">تشغيل الكاميرا</button>
+                <button id="scanBtn" onclick="captureBarcode()" class="scan-now" style="display:none;">مسح ✓</button>
+                <button id="stopBtn" onclick="stopScanner()" class="stop" style="display:none;">إيقاف</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>الوقت</th>
+                        <th>رقم الطالب</th>
+                        <th>#</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceTable">
+                    <tr>
+                        <td colspan="3" class="empty-state">لا توجد سجلات حضور</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let attendanceList = [];
+        let scannedIds = new Set();
+        let isScanning = false;
+        let scanRequested = false;
+        let lastDetectedCode = null;
+
+        function startScanner() {
+            if (isScanning) return;
+            
+            isScanning = true;
+            document.getElementById('scanner').classList.remove('camera-off');
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('scanBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'inline-block';
+
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#scanner'),
+                    constraints: {
+                        facingMode: "environment",
+                        aspectRatio: { min: 1, max: 2 }
+                    },
+                    area: {
+                        top: "30%",
+                        right: "10%",
+                        left: "10%",
+                        bottom: "30%"
+                    }
+                },
+                decoder: {
+                    readers: [
+                        "code_128_reader",
+                        "ean_reader",
+                        "ean_8_reader",
+                        "code_39_reader",
+                        "code_39_vin_reader",
+                        "codabar_reader",
+                        "upc_reader",
+                        "upc_e_reader",
+                        "i2of5_reader"
+                    ],
+                    multiple: false
+                },
+                locate: true,
+                frequency: 10,
+                numOfWorkers: navigator.hardwareConcurrency || 4,
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
+                }
+            }, function(err) {
+                if (err) {
+                    showStatus('خطأ في فتح الكاميرا', true);
+                    stopScanner();
+                    return;
+                }
+                Quagga.start();
+            });
+
+            Quagga.onDetected(function(result) {
+                if (result && result.codeResult && result.codeResult.code) {
+                    lastDetectedCode = result.codeResult.code;
+                }
+            });
+        }
+
+        function captureBarcode() {
+            if (!isScanning) {
+                showStatus('قم بتشغيل الكاميرا أولاً', true);
+                return;
+            }
+
+            if (!lastDetectedCode) {
+                showStatus('لم يتم اكتشاف باركود في الإطار', true);
+                return;
+            }
+
+            const code = lastDetectedCode;
+            
+            // Check if already scanned
+            if (scannedIds.has(code)) {
+                showStatus('تم تسجيل هذا الطالب مسبقاً', true);
+                lastDetectedCode = null;
+                return;
+            }
+
+            scannedIds.add(code);
+            
+            const time = new Date().toLocaleTimeString('ar-EG', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+
+            attendanceList.unshift({
+                id: code,
+                time: time
+            });
+
+            updateTable();
+            showSuccessFlash(code);
+            playBeep();
+            updateCount();
+            
+            lastDetectedCode = null;
+        }
+
+        function stopScanner() {
+            if (!isScanning) return;
+            
+            Quagga.stop();
+            isScanning = false;
+            lastDetectedCode = null;
+            document.getElementById('scanner').classList.add('camera-off');
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('scanBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'none';
+        }
+
+        function updateTable() {
+            const tbody = document.getElementById('attendanceTable');
+            
+            if (attendanceList.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="empty-state">لا توجد سجلات حضور</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = attendanceList.map((entry, index) => `
+                <tr>
+                    <td class="time">${entry.time}</td>
+                    <td><strong>${entry.id}</strong></td>
+                    <td>${attendanceList.length - index}</td>
+                </tr>
+            `).join('');
+        }
+
+        function updateCount() {
+            document.getElementById('count').textContent = attendanceList.length;
+        }
+
+        function showSuccessFlash(code) {
+            const flash = document.createElement('div');
+            flash.className = 'success-flash';
+            flash.textContent = '✓ تم';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 600);
+        }
+
+        function showStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status' + (isError ? ' error' : '');
+            status.style.display = 'block';
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 2000);
+        }
+
+        function playBeep() {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 1000;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.15);
+        }
+
+        // Prevent phone from sleeping
+        let wakeLock = null;
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {}
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && isScanning) {
+                requestWakeLock();
+            }
+        });
+
+        // Request wake lock when scanning starts
+        if (isScanning) {
+            requestWakeLock();
+        }
+    </script>
+</body>
+</html>
