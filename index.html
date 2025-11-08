@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مسح الحضور</title>
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+            min-height: 100vh;
+            padding: 15px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .count {
+            color: #3498db;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .scanner-container {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+        }
+
+        .camera-box {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background: #000;
+        }
+
+        #videoElement {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .scan-target {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 150px;
+            border: 4px solid #3498db;
+            border-radius: 15px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+            z-index: 10;
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6), 0 0 20px rgba(52, 152, 219, 0.5); }
+            50% { box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6), 0 0 40px rgba(52, 152, 219, 0.8); }
+        }
+
+        .corner {
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            border: 4px solid #2ecc71;
+        }
+
+        .corner.top-left {
+            top: -4px;
+            left: -4px;
+            border-right: none;
+            border-bottom: none;
+            border-radius: 15px 0 0 0;
+        }
+
+        .corner.top-right {
+            top: -4px;
+            right: -4px;
+            border-left: none;
+            border-bottom: none;
+            border-radius: 0 15px 0 0;
+        }
+
+        .corner.bottom-left {
+            bottom: -4px;
+            left: -4px;
+            border-right: none;
+            border-top: none;
+            border-radius: 0 0 0 15px;
+        }
+
+        .corner.bottom-right {
+            bottom: -4px;
+            right: -4px;
+            border-left: none;
+            border-top: none;
+            border-radius: 0 0 15px 0;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #2ecc71, transparent);
+            animation: scanning 2s ease-in-out infinite;
+        }
+
+        @keyframes scanning {
+            0% { top: 0; }
+            50% { top: calc(100% - 3px); }
+            100% { top: 0; }
+        }
+
+        .instruction {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(52, 152, 219, 0.95);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 15px;
+            font-weight: bold;
+            z-index: 11;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        canvas {
+            display: none;
+        }
+
+        .controls {
+            padding: 20px;
+            text-align: center;
+            background: white;
+            position: relative;
+            z-index: 100;
+        }
+
+        .scan-btn {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+            border: none;
+            padding: 18px 60px;
+            border-radius: 50px;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-shadow: none;
+        }
+
+        .scan-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(46, 204, 113, 0.5);
+        }
+
+        .scan-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .scan-btn:disabled {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+            cursor: wait;
+            opacity: 0.7;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 15px;
+            color: #3498db;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #ecf0f1;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-flash {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+            padding: 30px 60px;
+            border-radius: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 1000;
+            box-shadow: 0 10px 40px rgba(46, 204, 113, 0.6);
+            animation: flash 0.7s ease-out;
+        }
+
+        @keyframes flash {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 15px;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #ecf0f1;
+            text-align: right;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .time {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: #95a5a6;
+            font-size: 16px;
+        }
+
+        .status {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(52, 152, 219, 0.95);
+            color: white;
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-size: 15px;
+            font-weight: bold;
+            z-index: 999;
+            display: none;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+
+        .status.show {
+            display: block;
+            animation: slideDown 0.3s;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translate(-50%, -30px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        .status.error {
+            background: rgba(231, 76, 60, 0.95);
+        }
+    </style>
+</head>
+<body>
+    <div class="status" id="status"></div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>مسح الحضور</h1>
+            <div class="count">العدد: <span id="count">0</span></div>
+        </div>
+
+        <div class="scanner-container">
+            <div class="camera-box">
+                <video id="videoElement" autoplay playsinline></video>
+                <div class="scan-target">
+                    <div class="corner top-left"></div>
+                    <div class="corner top-right"></div>
+                    <div class="corner bottom-left"></div>
+                    <div class="corner bottom-right"></div>
+                    <div class="scan-line"></div>
+                </div>
+            </div>
+            
+            <canvas id="canvas"></canvas>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>جارٍ المسح...</p>
+            </div>
+
+            <div class="controls">
+                <button class="scan-btn" id="scanBtn">
+                    <span style="font-size: 24px;">📷</span>
+                    <span>مسح الآن</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>الوقت</th>
+                        <th>رقم الطالب</th>
+                        <th>#</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceTable">
+                    <tr>
+                        <td colspan="3" class="empty-state">لا توجد سجلات حضور</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let attendanceList = [];
+        let scannedIds = new Set();
+        let stream = null;
+
+        const videoElement = document.getElementById('videoElement');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const scanBtn = document.getElementById('scanBtn');
+        const loading = document.getElementById('loading');
+        const status = document.getElementById('status');
+        const tableBody = document.getElementById('attendanceTable');
+        const countEl = document.getElementById('count');
+
+        // Start Camera
+        async function startCamera() {
+            try {
+                console.log('📱 Starting camera...');
+                
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                
+                videoElement.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        videoElement.play().then(resolve);
+                    };
+                });
+                
+                console.log('✅ Camera ready!');
+                
+            } catch (err) {
+                console.error('❌ Camera error:', err);
+                showStatus('خطأ في فتح الكاميرا - تحقق من الأذونات', true);
+                alert('يرجى السماح بالوصول للكاميرا');
+            }
+        }
+
+        // Capture and Scan Barcode
+        async function captureAndScan() {
+            if (!videoElement.videoWidth || videoElement.videoWidth === 0) {
+                showStatus('الكاميرا غير جاهزة بعد', true);
+                return;
+            }
+            
+            loading.classList.add('show');
+            console.log('📸 Capturing image...');
+
+            // Capture image from video
+            const maxWidth = 800;
+            const scale = Math.min(1, maxWidth / videoElement.videoWidth);
+            
+            canvas.width = videoElement.videoWidth * scale;
+            canvas.height = videoElement.videoHeight * scale;
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+            const imageData = canvas.toDataURL('image/jpeg', 0.7);
+            console.log('📸 Image size: ' + Math.round(imageData.length / 1024) + 'KB');
+            
+            // Detect barcode using Quagga
+            const barcode = await detectBarcode(imageData);
+            
+            loading.classList.remove('show');
+            
+            if (barcode) {
+                console.log('✅ Barcode detected:', barcode);
+                
+                // Check if already scanned
+                if (scannedIds.has(barcode)) {
+                    showStatus('تم تسجيل هذا الطالب مسبقاً', true);
+                    return;
+                }
+                
+                // Add to attendance list
+                scannedIds.add(barcode);
+                
+                const time = new Date().toLocaleTimeString('ar-EG', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+
+                attendanceList.unshift({
+                    id: barcode,
+                    time: time
+                });
+
+                // Update UI
+                updateTable();
+                showSuccessFlash();
+                playBeep();
+                updateCount();
+                showStatus('تم تسجيل الحضور بنجاح', false);
+                
+            } else {
+                console.log('❌ No barcode detected');
+                showStatus('لا يوجد باركود في الصورة', true);
+            }
+        }
+
+        // Detect Barcode using Quagga2
+        function detectBarcode(imageData) {
+            return new Promise((resolve) => {
+                Quagga.decodeSingle({
+                    src: imageData,
+                    numOfWorkers: 0,
+                    decoder: {
+                        readers: [
+                            "code_128_reader",
+                            "ean_reader",
+                            "ean_8_reader",
+                            "code_39_reader",
+                            "upc_reader"
+                        ]
+                    },
+                    locate: true
+                }, function(result) {
+                    if (result && result.codeResult) {
+                        console.log('✅ Barcode:', result.codeResult.code);
+                        resolve(result.codeResult.code);
+                    } else {
+                        console.log('❌ No barcode');
+                        resolve(null);
+                    }
+                });
+            });
+        }
+
+        // Update Table
+        function updateTable() {
+            if (attendanceList.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="3" class="empty-state">لا توجد سجلات حضور</td></tr>';
+                return;
+            }
+
+            tableBody.innerHTML = attendanceList.map((entry, index) => `
+                <tr>
+                    <td class="time">${entry.time}</td>
+                    <td><strong style="font-size: 16px;">${entry.id}</strong></td>
+                    <td><strong>${attendanceList.length - index}</strong></td>
+                </tr>
+            `).join('');
+        }
+
+        function updateCount() {
+            countEl.textContent = attendanceList.length;
+        }
+
+        function showSuccessFlash() {
+            const flash = document.createElement('div');
+            flash.className = 'success-flash';
+            flash.textContent = '✓ تم التسجيل';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 700);
+        }
+
+        function showStatus(message, isError = false) {
+            status.textContent = message;
+            status.className = 'status' + (isError ? ' error' : '');
+            status.classList.add('show');
+            setTimeout(() => {
+                status.classList.remove('show');
+            }, 3000);
+        }
+
+        function playBeep() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 1200;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.2);
+            } catch (e) {
+                console.log('Audio not available');
+            }
+        }
+
+        // Event Listeners
+        scanBtn.addEventListener('click', captureAndScan);
+
+        // Initialize
+        console.log('🚀 Initializing app...');
+        startCamera();
+        updateTable();
+        console.log('✅ App ready!');
+    </script>
+</body>
+</html>
